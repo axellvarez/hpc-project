@@ -55,7 +55,7 @@ int main(int argc, char** argv) {
         for (int i = 0; i < N * K; i++) B[i] = (double)rand() / RAND_MAX;
 
         printf("Starting Point-to-Point Matrix Multiplication for size %d x %d x %d...\n", M, N, K);
-
+`
         // Start the parallel execution timer
         double start_time = MPI_Wtime();
 
