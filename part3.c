@@ -32,6 +32,11 @@ void quickSort(int arr[], int low, int high) {
         quickSort(arr, pi + 1, high);
     }
 }
+
+// C's built-in comparison function for the final safe merge
+int compare(const void *a, const void *b) {
+    return (*(int*)a - *(int*)b);
+}
 // ======================================================================
 
 int main(int argc, char** argv) {
@@ -49,23 +54,15 @@ int main(int argc, char** argv) {
         printf("Using default array size: 1,000,000\n\n");
     }
 
-    // Pointer for the full array (only allocated on Rank 0)
     int *global_array = NULL;
-    
-    // Pointer for the local chunks every process needs
     int *local_array = NULL;
-
-    // Calculate block sizes. 
-    // For MPI_Scatter/Gather, we assume N is perfectly divisible by size.
     int chunk = N / size; 
 
     local_array = (int*)malloc(chunk * sizeof(int));
 
     if (rank == 0) {
-        // Allocate the full array
         global_array = (int*)malloc(N * sizeof(int));
         
-        // Read the unsorted array using the professor's exact file reading logic
         char str[100];
         int count = 0;
         FILE* fp = fopen("data.txt", "r");
@@ -87,44 +84,37 @@ int main(int argc, char** argv) {
         printf("Starting Parallel Quicksort for %d elements...\n", N);
     }
 
-    // Sync all processes before starting the timer to ensure accurate timing
     MPI_Barrier(MPI_COMM_WORLD); 
-    
-    // Start the parallel execution timer
     double start_time = MPI_Wtime();
 
-    // Distribute equal blocks of the array to all processes (including Rank 0)
     MPI_Scatter(global_array, chunk, MPI_INT, local_array, chunk, MPI_INT, 0, MPI_COMM_WORLD);
 
-    // Compute local sorting block 
-    // Each process uses the Professor's Quicksort on its local chunk
+    // Each process uses the Professor's Quicksort on its local unsorted chunk
     quickSort(local_array, 0, chunk - 1);
 
-    // Aggregate results into the final array using Gather
     MPI_Gather(local_array, chunk, MPI_INT, global_array, chunk, MPI_INT, 0, MPI_COMM_WORLD);
 
-    // Rank 0 completes the final merge by doing one last quicksort pass
+    // Rank 0 completes the final merge safely avoiding the O(N^2) trap
     if (rank == 0) {
-        quickSort(global_array, 0, N - 1);
+        qsort(global_array, N, sizeof(int), compare);
     }
 
-    // Stop the parallel execution timer
     double end_time = MPI_Wtime();
 
     if (rank == 0) {
-        printf("Parallel Quicksort Complete\n");
-        printf("Elapsed time: %f seconds\n\n", end_time - start_time);
-
-        // Verification (Not included in parallel timing)
-        printf("Starting verification...\n");
+        // Convert the decimal seconds into nanoseconds
+        unsigned long long diff_ns = (unsigned long long)((end_time - start_time) * 1000000000.0);
         
-        // Compare elements to ensure ascending order
+        printf("Parallel Quicksort Complete\n");
+        printf("elapsed time = %llu nanoseconds\n\n", diff_ns);
+
+        printf("Starting verification...\n");
         int passed = 1;
         for (int i = 0; i < N - 1; i++) {
             if (global_array[i] > global_array[i+1]) {
                 passed = 0;
                 printf("Mismatch: Index %d (%d) is greater than Index %d (%d)\n", i, global_array[i], i+1, global_array[i+1]);
-                break; // Stop at the first error to avoid flooding the terminal
+                break; 
             }
         }
 
@@ -137,9 +127,7 @@ int main(int argc, char** argv) {
         free(global_array);
     }
 
-    // Clean up local memory
     free(local_array);
-
     MPI_Finalize();
     return 0;
 }
