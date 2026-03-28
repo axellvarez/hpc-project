@@ -46,7 +46,7 @@ int main(int argc, char** argv) {
     C_local = (double*)malloc(local_rows * K * sizeof(double));
 
     if (rank == 0) {
-        // 1. Allocate and initialize full matrices A and C
+        // Allocate and initialize full matrices A and C
         A = (double*)malloc(M * N * sizeof(double));
         C = (double*)malloc(M * K * sizeof(double));
         
@@ -54,27 +54,29 @@ int main(int argc, char** argv) {
         for (int i = 0; i < M * N; i++) A[i] = (double)rand() / RAND_MAX;
         for (int i = 0; i < N * K; i++) B[i] = (double)rand() / RAND_MAX;
 
+        printf("Starting Point-to-Point Matrix Multiplication for size %d x %d x %d...\n", M, N, K);
+
         // Start the parallel execution timer
         double start_time = MPI_Wtime();
 
-        // 2. Send full matrix B to all worker processes
+        // Send full matrix B to all worker processes
         for (int dest = 1; dest < size; dest++) {
             MPI_Send(B, N * K, MPI_DOUBLE, dest, 0, MPI_COMM_WORLD);
         }
 
-        // 3. Distribute blocks of A to worker processes
+        // Distribute blocks of A to worker processes
         for (int dest = 1; dest < size; dest++) {
             int offset = (dest - 1) * chunk * N;
             MPI_Send(&A[offset], chunk * N, MPI_DOUBLE, dest, 1, MPI_COMM_WORLD);
         }
 
-        // 4. Copy the last block into Rank 0's local memory
+        // Copy the last block into Rank 0's local memory
         int offset_rank0 = (size - 1) * chunk * N;
         for (int i = 0; i < local_rows * N; i++) {
             A_local[i] = A[offset_rank0 + i];
         }
 
-        // 5. Rank 0 computes its own block (the last block)
+        // Rank 0 computes its own block (the last block)
         for (int i = 0; i < local_rows; i++) {
             for (int j = 0; j < K; j++) {
                 double sum = 0.0;
@@ -85,7 +87,7 @@ int main(int argc, char** argv) {
             }
         }
 
-        // 6. Aggregate results into the final matrix C
+        // Aggregate results into the final matrix C
         // Copy Rank 0's computed block into the correct position in C
         int c_offset_rank0 = (size - 1) * chunk * K;
         for (int i = 0; i < local_rows * K; i++) {
@@ -100,13 +102,12 @@ int main(int argc, char** argv) {
 
         // Stop the parallel execution timer
         double end_time = MPI_Wtime();
-        printf("Parallel Matrix Multiplication Complete!\n");
+        printf("Parallel Matrix Multiplication Complete\n");
         printf("Elapsed time: %f seconds\n\n", end_time - start_time);
 
-        // =====================================================================
-        // VERIFICATION PHASE (Not included in parallel timing)
-        // =====================================================================
-        printf("Starting verification against sequential calculation...\n");
+      
+        // Verification (Not included in parallel timing)
+         printf("Starting verification against sequential calculation...\n");
         double *C_seq = (double*)malloc(M * K * sizeof(double));
         
         // Sequential matrix multiplication
@@ -141,15 +142,13 @@ int main(int argc, char** argv) {
         free(C);
 
     } else {
-        // =====================================================================
-        // WORKER PROCESS LOGIC
-        // =====================================================================
         
-        // 1. Receive matrix B and local chunk of A
+        // WORKER PROCESS LOGIC
+        // Receive matrix B and local chunk of A
         MPI_Recv(B, N * K, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         MPI_Recv(A_local, local_rows * N, MPI_DOUBLE, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-        // 2. Compute local matrix block C_local
+        // Compute local matrix block C_local
         for (int i = 0; i < local_rows; i++) {
             for (int j = 0; j < K; j++) {
                 double sum = 0.0;
@@ -160,7 +159,7 @@ int main(int argc, char** argv) {
             }
         }
 
-        // 3. Send the computed block back to Rank 0
+        // Send the computed block back to Rank 0
         MPI_Send(C_local, local_rows * K, MPI_DOUBLE, 0, 2, MPI_COMM_WORLD);
     }
 
